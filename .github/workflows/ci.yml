@@ -1,0 +1,62 @@
+name: IceTrack CI
+
+on:
+  push:
+    branches:
+      - main
+      - prototype/**
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  flutter-analyze-and-test:
+    name: Flutter Analyze & Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: prototype
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+      - name: Run static analysis (flutter analyze)
+        run: flutter analyze --no-fatal-infos
+
+      - name: Run widget & unit tests (flutter test)
+        run: flutter test
+
+  srs-and-secret-hygiene:
+    name: SRS & Secret Hygiene Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check SRS document status (docs/SRS.md or .docx)
+        run: |
+          if [ -s docs/SRS.md ] || ls docs/*.docx >/dev/null 2>&1; then
+            echo "Verified SRS document in docs/."
+          else
+            echo "Notice: SRS document not added to docs/ yet."
+          fi
+
+      - name: Verify no hardcoded API keys exist (NFR-AI-01)
+        run: |
+          if grep -rnE "sk-[A-Za-z0-9]{20,}" . --exclude-dir=.git --exclude-dir=.dart_tool --exclude-dir=build; then
+            echo "Error: Hardcoded API key detected! Remove secrets immediately."
+            exit 1
+          fi
+          echo "Passed: Zero hardcoded API keys found."
